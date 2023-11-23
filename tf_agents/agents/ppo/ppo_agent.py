@@ -131,6 +131,8 @@ class PPOAgent(tf_agent.TFAgent):
       shared_vars_l2_reg: types.Float = 0.0,
       value_pred_loss_coef: types.Float = 0.5,
       num_epochs: int = 25,
+      spatial_similarity_coef=0,
+      temporal_similarity_coef=0,
       use_gae: bool = False,
       use_td_lambda_return: bool = False,
       normalize_rewards: bool = True,
@@ -312,6 +314,8 @@ class PPOAgent(tf_agent.TFAgent):
     self._shared_vars_l2_reg = shared_vars_l2_reg
     self._value_pred_loss_coef = value_pred_loss_coef
     self._num_epochs = num_epochs
+    self.spatial_similarity_coef=spatial_similarity_coef
+    self.temporal_similarity_coef=temporal_similarity_coef
     self._use_gae = use_gae
     self._use_td_lambda_return = use_td_lambda_return
     self._reward_norm_clipping = reward_norm_clipping
@@ -835,8 +839,9 @@ class PPOAgent(tf_agent.TFAgent):
     if self._optimizer is None:
       raise ValueError('Optimizer is undefined.')
 
+    self.cur_transition = self._collected_as_transition(experience)
     experience = self._as_trajectory(experience)
-
+    
     if self._compute_value_and_advantage_in_train:
       processed_experience = self._preprocess(experience)
     else:
@@ -886,7 +891,9 @@ class PPOAgent(tf_agent.TFAgent):
         discount=processed_experience.discount,
         observation=processed_experience.observation,
     )
+    
     actions = processed_experience.action
+    
     returns = processed_experience.policy_info['return']
     advantages = processed_experience.policy_info['advantage']
 
@@ -1215,7 +1222,7 @@ class PPOAgent(tf_agent.TFAgent):
 
     Args:
       time_steps: A batch of timesteps.
-      returns: Per-timestep returns for value function to predict. (Should come
+      returns: Per-timestep returns for value function to predict. (Should cometime_steps_2, policy_steps, next_time_steps = transition
         from TD-lambda computation.)
       weights: Optional scalar or element-wise (per-batch-entry) importance
         weights.  Includes a mask for invalid timesteps.
@@ -1399,6 +1406,43 @@ class PPOAgent(tf_agent.TFAgent):
       policy_gradient_loss = -per_timestep_objective_min
     else:
       policy_gradient_loss = -per_timestep_objective
+
+    # Implenting CAPS
+    
+    if self.spatial_similarity_coef > 0:
+      
+      noise_gaussian= tf.random.normal(shape=time_steps.observation.shape,mean=0,stddev=0.01)
+      observation_spec=self._time_step_spec.observation
+      observation_ranges=observation_spec.maximum-observation_spec.minimum
+      observation_noise=tf.multiply(noise_gaussian,observation_ranges)
+      
+      similar_state= time_steps.observation + observation_noise
+      # similar_actions=self._collect_policy.action(similar_state,step_type=time_steps.step_type,network_state=()).action
+      similar_action_dist,_=self._actor_net(similar_state,step_type=time_steps.step_type,network_state=())
+      similar_actions=similar_action_dist.sample()
+      print(actions.shape,similar_action_dist.shape)
+      # with tf.name_scope('actor_loss'):          
+      spatial_smoothness=tf.nn.l2_loss(actions-similar_actions)
+      # spatial_smoothness=tf.reduce_sum(spatial_smoothness, axis=1)          
+
+      policy_gradient_loss+=spatial_smoothness*self.spatial_similarity_coef
+      
+    if self.temporal_similarity_coef > 0:
+      
+      ts,acts,next_ts=self.cur_transition
+      actions_next_dist,_=self._actor_net(next_ts.observation,step_type=next_ts.step_type,network_state=())
+      actions_next=actions_next_dist.sample()
+      # print(actions_next.shape,actions.shape)
+      # with tf.name_scope('actor_loss'):
+      temporal_smoothness=tf.nn.l2_loss(acts.action-actions_next)
+      # temporal_smoothness=tf.reduce_sum(temporal_smoothness, axis=1)
+
+      policy_gradient_loss+=temporal_smoothness*self.temporal_similarity_coef
+      
+    # loss+=self.spatial_similarity_coef*spatial_smoothness + self.temporal_similarity_coef*temporal_smoothness    
+    #End CAPS
+
+
 
     if self._aggregate_losses_across_replicas:
       policy_gradient_loss = common.aggregate_losses(
