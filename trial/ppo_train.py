@@ -1,5 +1,5 @@
 import numpy as np
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 import tensorflow as tf
 import tf_agents
 from tf_agents.environments import tf_py_environment
@@ -45,7 +45,7 @@ agent = ppo_clip_agent.PPOClipAgent(
     discount_factor = 0.95,
     entropy_regularization = 0.01,
     num_epochs = 10,
-    spatial_similarity_coef=0,
+    spatial_similarity_coef=0.001,
     temporal_similarity_coef=0.001,
     use_gae= True,
     use_td_lambda_return= False,

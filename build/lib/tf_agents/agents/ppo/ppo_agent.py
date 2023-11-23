@@ -486,8 +486,6 @@ class PPOAgent(tf_agent.TFAgent):
       self,
       time_steps: ts.TimeStep,
       actions: types.NestedTensorSpec,
-      time_steps_2:ts.TimeStep,
-      next_time_steps: ts.TimeStep,
       act_log_probs: types.Tensor,
       returns: types.Tensor,
       normalized_advantages: types.Tensor,
@@ -549,8 +547,6 @@ class PPOAgent(tf_agent.TFAgent):
     policy_gradient_loss = self.policy_gradient_loss(
         time_steps,
         actions,
-        time_steps_2,
-        next_time_steps,
         tf.stop_gradient(act_log_probs),
         tf.stop_gradient(normalized_advantages),
         current_policy_distribution,
@@ -843,11 +839,8 @@ class PPOAgent(tf_agent.TFAgent):
     if self._optimizer is None:
       raise ValueError('Optimizer is undefined.')
 
-    transition = self._collected_as_transition(experience)
+    self.cur_transition = self._collected_as_transition(experience)
     experience = self._as_trajectory(experience)
-    
-    time_steps_2, policy_steps, next_time_steps = transition
-    self.cur_transition=transition
     
     if self._compute_value_and_advantage_in_train:
       processed_experience = self._preprocess(experience)
@@ -947,8 +940,6 @@ class PPOAgent(tf_agent.TFAgent):
           loss_info = self.get_loss(
               time_steps,
               actions,
-              time_steps_2,
-              next_time_steps,
               old_act_log_probs,
               returns,
               normalized_advantages,
@@ -1346,8 +1337,6 @@ class PPOAgent(tf_agent.TFAgent):
       self,
       time_steps: ts.TimeStep,
       actions: types.NestedTensor,
-      time_steps_2:ts.TimeStep,
-      next_time_steps:ts.TimeStep,
       sample_action_log_probs: types.Tensor,
       advantages: types.Tensor,
       current_policy_distribution: types.NestedDistribution,
@@ -1431,7 +1420,6 @@ class PPOAgent(tf_agent.TFAgent):
       # similar_actions=self._collect_policy.action(similar_state,step_type=time_steps.step_type,network_state=()).action
       similar_action_dist,_=self._actor_net(similar_state,step_type=time_steps.step_type,network_state=())
       similar_actions=similar_action_dist.sample()
-      print(actions.shape,similar_action_dist.shape)
       # with tf.name_scope('actor_loss'):          
       spatial_smoothness=tf.nn.l2_loss(actions-similar_actions)
       # spatial_smoothness=tf.reduce_sum(spatial_smoothness, axis=1)          

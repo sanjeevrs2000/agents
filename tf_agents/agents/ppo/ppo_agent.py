@@ -1420,7 +1420,6 @@ class PPOAgent(tf_agent.TFAgent):
       # similar_actions=self._collect_policy.action(similar_state,step_type=time_steps.step_type,network_state=()).action
       similar_action_dist,_=self._actor_net(similar_state,step_type=time_steps.step_type,network_state=())
       similar_actions=similar_action_dist.sample()
-      print(actions.shape,similar_action_dist.shape)
       # with tf.name_scope('actor_loss'):          
       spatial_smoothness=tf.nn.l2_loss(actions-similar_actions)
       # spatial_smoothness=tf.reduce_sum(spatial_smoothness, axis=1)          
