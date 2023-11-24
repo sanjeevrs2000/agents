@@ -66,8 +66,8 @@ class DdpgAgent(tf_agent.TFAgent):
       target_update_period: types.Int = 1,
       dqda_clipping: Optional[types.Float] = None,
       td_errors_loss_fn: Optional[types.LossFn] = None,
-      spatial_similarity_coef=0.0,
-      temporal_similarity_coef=0.0,
+      spatial_similarity_coef:types.Float=0,
+      temporal_similarity_coef: types.Float=0,
       gamma: types.Float = 1.0,
       reward_scale_factor: types.Float = 1.0,
       gradient_clipping: Optional[types.Float] = None,
@@ -206,6 +206,8 @@ class DdpgAgent(tf_agent.TFAgent):
     self._as_transition = data_converter.AsTransition(
         self.data_context, squeeze_time_dim=not self._actor_network.state_spec
     )
+    observation_spec=self._time_step_spec.observation
+    self.observation_ranges=observation_spec.maximum-observation_spec.minimum        
 
   def _initialize(self):
     common.soft_variables_update(
@@ -456,48 +458,42 @@ class DdpgAgent(tf_agent.TFAgent):
           # Sum over the time dimension.
           loss = tf.reduce_sum(loss, axis=1)
         
-        # spatial_smoothness=tf.Tensor(dtype=tf.float32)
-        # temporal_smoothness=tf.Tensor(dtype=tf.float32)
-
-        #Implenting CAPS
-        if self.spatial_similarity_coef > 0:
-
-          noise_gaussian= tf.random.normal(shape=time_steps.observation.shape,mean=0,stddev=0.01)
-          print(time_steps.observation.shape)
-          observation_spec=self._time_step_spec.observation
-          observation_ranges=observation_spec.maximum-observation_spec.minimum
-          observation_noise=tf.multiply(noise_gaussian,observation_ranges)
-          
-          similar_state= time_steps.observation + observation_noise
-          # similar_actions=self.policy.action(similar_state).action
-          similar_actions, _ = self._actor_network(similar_state,step_type=time_steps.step_type)
-        
-          # with tf.name_scope('actor_loss'):          
-          spatial_smoothness=tf.nn.l2_loss(actions-similar_actions)
-          # spatial_smoothness=tf.reduce_sum(spatial_smoothness, axis=1)          
-
-          loss+=spatial_smoothness*self.spatial_similarity_coef
-          
-        if self.temporal_similarity_coef > 0:
-
-          # actions_next=self.policy.action(next_time_steps).action
-          actions_next, _ = self._actor_network(next_time_steps.observation,step_type=next_time_steps.step_type)
-          # with tf.name_scope('actor_loss'):
-          temporal_smoothness=tf.nn.l2_loss(actions-actions_next)
-          # temporal_smoothness=tf.reduce_sum(temporal_smoothness, axis=1)
-
-          loss+=temporal_smoothness*self.temporal_similarity_coef
-          
-        # loss+=self.spatial_similarity_coef*spatial_smoothness + self.temporal_similarity_coef*temporal_smoothness
-        
-        #End CAPS
-        
         if weights is not None:
           loss *= weights
         loss = tf.reduce_mean(loss)
+        
         actor_losses.append(loss)
-
+      
       actor_loss = tf.add_n(actor_losses)
+
+      #Implenting CAPS
+      
+      # spatial_smoothness=tf.Tensor(dtype=tf.float32)
+      # temporal_smoothness=tf.Tensor(dtype=tf.float32)
+
+      if self.spatial_similarity_coef > 0:
+
+        noise_gaussian= tf.random.normal(shape=time_steps.observation.shape,mean=0,stddev=0.01)
+        observation_noise=tf.multiply(noise_gaussian,self.observation_ranges)
+        
+        similar_state= time_steps.observation + observation_noise
+        similar_actions, _ = self._actor_network(similar_state,step_type=time_steps.step_type)
+                
+        spatial_smoothness=tf.nn.l2_loss(actions-similar_actions)
+        # spatial_smoothness=tf.reduce_sum(spatial_smoothness, axis=1)          
+        actor_loss+=spatial_smoothness*self.spatial_similarity_coef
+        
+      if self.temporal_similarity_coef > 0:
+
+        actions_next, _ = self._actor_network(next_time_steps.observation,step_type=next_time_steps.step_type)
+        
+        temporal_smoothness=tf.nn.l2_loss(actions-actions_next)
+        # temporal_smoothness=tf.reduce_sum(temporal_smoothness, axis=1)
+
+        actor_loss+=temporal_smoothness*self.temporal_similarity_coef
+        
+      # End CAPS
+
 
       with tf.name_scope('Losses/'):
         tf.compat.v2.summary.scalar(

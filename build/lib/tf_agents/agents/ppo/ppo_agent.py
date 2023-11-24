@@ -432,7 +432,10 @@ class PPOAgent(tf_agent.TFAgent):
     self._as_trajectory = data_converter.AsTrajectory(
         self.data_context, sequence_length=None
     )
+    observation_spec=self._time_step_spec.observation
+    self.observation_ranges=observation_spec.maximum-observation_spec.minimum
 
+    
   @property
   def actor_net(self) -> network.Network:
     """Returns actor_net TensorFlow template function."""
@@ -1410,11 +1413,9 @@ class PPOAgent(tf_agent.TFAgent):
     # Implenting CAPS
     
     if self.spatial_similarity_coef > 0:
-      
+      print("Caps")
       noise_gaussian= tf.random.normal(shape=time_steps.observation.shape,mean=0,stddev=0.01)
-      observation_spec=self._time_step_spec.observation
-      observation_ranges=observation_spec.maximum-observation_spec.minimum
-      observation_noise=tf.multiply(noise_gaussian,observation_ranges)
+      observation_noise=tf.multiply(noise_gaussian,self.observation_ranges)
       
       similar_state= time_steps.observation + observation_noise
       # similar_actions=self._collect_policy.action(similar_state,step_type=time_steps.step_type,network_state=()).action
@@ -1427,7 +1428,7 @@ class PPOAgent(tf_agent.TFAgent):
       policy_gradient_loss+=spatial_smoothness*self.spatial_similarity_coef
       
     if self.temporal_similarity_coef > 0:
-      
+      print("caps")
       ts,acts,next_ts=self.cur_transition
       actions_next_dist,_=self._actor_net(next_ts.observation,step_type=next_ts.step_type,network_state=())
       actions_next=actions_next_dist.sample()
