@@ -501,27 +501,3 @@ class DdpgAgent(tf_agent.TFAgent):
         )
         
     return actor_loss
-
-"""
-spatial_smoothness=tf.Tensor(shape=(None,),dtype=tf.float32)
-temporal_smoothness=tf.Tensor(shape=(None,),dtype=tf.float32)
-
-
-if self.spatial_similarity_coef > 0:
-  g_noise= tf.random.normal(shape=action.,mean=0,std=0.01)
-  observation_spec=time_step_spec().observation
-  observation_ranges=observation_spec.maximum-observation.minimum
-  observation_noise=tf.multiply(g_noise,observation_ranges)
-  similar_state=observation + observation_noise
-  similar_actions=policy.action._step(similar_state).action
-  spatial_smoothness=tf.nn.l2_loss(actions-similar_actions)/tf.cast(tf.shape(pi)[0],float)
-
-    
-if self.temporal_similarity_coef > 0:
-  actions_next=policy.action_step(next_time_steps).action
-  temporal_smoothness=tf.math.sqrt(tf.nn.l2_loss(actions-actions_next))
-  temporal_smoothness=tf.nn.l2_loss(actions-actions_next)/tf.cast(tf.shape(pi)[0],float)
-
-caps_loss=self.spatial_similarity_coef*spatial_smoothness + self.temporal_similarity_coef*temporal_smoothness
-
-"""

@@ -1413,27 +1413,23 @@ class PPOAgent(tf_agent.TFAgent):
     # Implenting CAPS
     
     if self.spatial_similarity_coef > 0:
-      print("Caps")
+
       noise_gaussian= tf.random.normal(shape=time_steps.observation.shape,mean=0,stddev=0.01)
-      observation_noise=tf.multiply(noise_gaussian,self.observation_ranges)
-      
+      observation_noise=tf.multiply(noise_gaussian,self.observation_ranges)    
       similar_state= time_steps.observation + observation_noise
-      # similar_actions=self._collect_policy.action(similar_state,step_type=time_steps.step_type,network_state=()).action
+  
       similar_action_dist,_=self._actor_net(similar_state,step_type=time_steps.step_type,network_state=())
       similar_actions=similar_action_dist.sample()
-      # with tf.name_scope('actor_loss'):          
       spatial_smoothness=tf.nn.l2_loss(actions-similar_actions)
       # spatial_smoothness=tf.reduce_sum(spatial_smoothness, axis=1)          
 
       policy_gradient_loss+=spatial_smoothness*self.spatial_similarity_coef
       
     if self.temporal_similarity_coef > 0:
-      print("caps")
+
       ts,acts,next_ts=self.cur_transition
       actions_next_dist,_=self._actor_net(next_ts.observation,step_type=next_ts.step_type,network_state=())
       actions_next=actions_next_dist.sample()
-      # print(actions_next.shape,actions.shape)
-      # with tf.name_scope('actor_loss'):
       temporal_smoothness=tf.nn.l2_loss(acts.action-actions_next)
       # temporal_smoothness=tf.reduce_sum(temporal_smoothness, axis=1)
 
